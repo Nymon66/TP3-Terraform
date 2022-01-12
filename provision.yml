@@ -1,0 +1,95 @@
+- become: yes
+  hosts: all
+  name: apache-install
+  tasks:
+    - name: Add the user 'phpipam' and add it to 'sudo'
+      user:
+        name: phpipam
+        group: sudo
+
+    - name: Add SSH key to 'phpipam'
+      authorized_key:
+        user: phpipam
+        state: present
+        key: "{{ lookup('file', pub_key) }}"
+
+    - name: Wait for apt to unlock
+      become: yes
+      shell:  while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 5; done;
+
+    - name: Install apache2
+      apt:
+        name: apache2
+        update_cache: yes
+        state: latest
+
+    - name: Enable mod_rewrite
+      apache2_module:
+        name: rewrite
+        state: present
+      notify:
+        - Restart apache2
+
+
+
+    - name: Clone phpIPAM from git
+      git:
+        repo: 'https://github.com/phpipam/phpipam.git'
+        dest: /var/www/phpipam
+        force: yes
+    
+    - name: Install Required Packages
+      apt:
+        name: "{{ item }}"
+        state: latest
+      with_items:
+       - mariadb-server
+       - php
+       - php-cli
+       - php-gd
+       - php-common
+       - php-ldap
+       - php-pdo
+       - php-pear
+       - php-snmp
+       - php-xml
+       - php-mysql
+       - php-mbstring
+       - php-curl
+       - php-gmp
+       - git
+       - wget
+       - curl
+
+    - name: copying config.php file with playbook
+      become: true 
+      copy:
+        src: /root/terraform/config.php
+        dest: /var/www/phpipam/
+        owner: root
+        group: root        
+        mode: 0644
+
+    - name: copying .conf file with playbook
+      become: true
+      copy:
+        src: /root/terraform/phpipam.conf
+        dest: /etc/apache2/sites-available/
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Disable default site
+      ansible.builtin.shell: a2dissite 000-default.conf
+
+    - name: enable phpipam site
+      ansible.builtin.shell: a2ensite phpipam.conf
+
+    - name: restart apache2
+      ansible.builtin.shell: systemctl restart apache2
+
+  handlers:
+    - name: Restart apache2
+      service:
+        name: apache2
+        state: restarted

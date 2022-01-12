@@ -7,6 +7,9 @@ terraform {
   required_version = ">= 0.13"
 }
 
+variable "pvt_key" {}
+variable "pub_key" {}
+
 provider "scaleway" {
   zone = "fr-par-1"
   region = "fr-par"
